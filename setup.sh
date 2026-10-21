@@ -34,6 +34,7 @@ fi
 app_for_cask() {
   case "$1" in
     spotify) echo 'Spotify.app' ;;
+    steam) echo 'Steam.app' ;;
     google-chrome) echo 'Google Chrome.app' ;;
     chatgpt) echo 'ChatGPT.app' ;;
     visual-studio-code) echo 'Visual Studio Code.app' ;;
@@ -65,13 +66,15 @@ already_present() {
 }
 
 log 'Installing packages from Brewfile'
-while IFS= read -r line || [[ -n "$line" ]]; do
+# Use a separate descriptor so installers cannot consume remaining Brewfile lines.
+while IFS= read -r -u 3 line || [[ -n "$line" ]]; do
   # The supported Brewfile format is: brew "name" or cask "name".
   if [[ "$line" =~ ^[[:space:]]*brew[[:space:]]+\"([a-zA-Z0-9@+._-]+)\" ]]; then
     name="${BASH_REMATCH[1]}"
     if brew list --formula "$name" >/dev/null 2>&1; then
       echo "Skipping formula $name (already managed by Homebrew)"
     else
+      log "Installing formula $name"
       brew install "$name"
     fi
   elif [[ "$line" =~ ^[[:space:]]*cask[[:space:]]+\"([a-zA-Z0-9@+._-]+)\" ]]; then
@@ -79,10 +82,18 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     if already_present "$name"; then
       echo "Skipping cask $name (already installed)"
     else
+      log "Installing cask $name"
       brew install --cask "$name"
     fi
   fi
-done < "$BREWFILE"
+done 3< "$BREWFILE"
+
+for binary in codex claude; do
+  if ! command -v "$binary" >/dev/null 2>&1; then
+    echo "Setup incomplete: $binary is not available in PATH." >&2
+    exit 1
+  fi
+done
 
 if [[ -d "$HOME/.oh-my-zsh" ]]; then
   log 'Skipping Oh My Zsh (already installed)'
@@ -93,3 +104,4 @@ else
 fi
 
 log 'Finished! Restart your terminal to load the new configuration.'
+echo 'Run codex or claude to sign in and start using the AI coding CLIs.'
